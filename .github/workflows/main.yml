@@ -25,15 +25,16 @@ jobs:
           workload_identity_provider: "${{ secrets.WIF_PROVIDER }}"
           service_account: "${{ secrets.WIF_SERVICE_ACCOUNT }}"
 
+      # Set up the gcloud CLI
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
       # Move the credentials file out of the workspace to protect it from git clean
       - name: Protect Credentials File
         run: |
           mv $GOOGLE_APPLICATION_CREDENTIALS ${{ runner.temp }}/gha-creds.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=${{ runner.temp }}/gha-creds.json" >> $GITHUB_ENV
-
-      # Set up the gcloud CLI
-      - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+          echo "$GOOGLE_APPLICATION_CREDENTIALS"
 
       # Download and Install CodeMender On-The-Fly
       - name: Install CodeMender CLI
