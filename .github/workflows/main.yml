@@ -122,7 +122,28 @@ jobs:
         run: |
           jq -r '.[] | select(.status == "OPEN") | .finding_id' codemender_report.json | while read -r finding_id; do
               echo "Verifying ID: $finding_id"
-              cm verify $finding_id --bypass-warning -y
+              max_retries=3
+              for ((attempt=1; attempt<=max_retries; attempt++)); do
+                  echo "Attempt $attempt of $max_retries..."
+                  
+                  if cm verify $finding_id --bypass-warning -y; then
+                      echo "CLI succeeded (Exit code 0)"
+                      break # Exit the loop immediately on success
+                  else
+                      # The shell enters here if the exit code is non-zero
+                      exit_code=$?
+                      echo "CLI failed with exit code: $exit_code"
+                      
+                      if [ "$attempt" -eq "$max_retries" ]; then
+                          echo "All $max_retries attempts failed. Exiting."
+                          exit "$exit_code"
+                      fi
+                      
+                      # Optional: Wait 2 seconds before retrying
+                      echo "Retrying in 2 seconds..."
+                      sleep 2
+                  fi
+              done
           done
           # Update JSON report on disk
           cm report --format json > codemender_report.json
