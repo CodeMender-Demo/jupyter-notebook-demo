@@ -24,6 +24,7 @@ jobs:
         with:
           workload_identity_provider: "${{ secrets.WIF_PROVIDER }}"
           service_account: "${{ secrets.WIF_SERVICE_ACCOUNT }}"
+          credentials_file_path: '${{ runner.temp }}/gha-creds.json'
 
       # Set up the gcloud CLI
       - name: Set up Google Cloud SDK
