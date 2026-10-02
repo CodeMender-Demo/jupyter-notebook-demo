@@ -24,7 +24,12 @@ jobs:
         with:
           workload_identity_provider: "${{ secrets.WIF_PROVIDER }}"
           service_account: "${{ secrets.WIF_SERVICE_ACCOUNT }}"
-          credentials_file_path: '${{ runner.temp }}/gha-creds.json'
+
+      # Move the credentials file out of the workspace to protect it from git clean
+      - name: Protect Credentials File
+        run: |
+          mv $GOOGLE_APPLICATION_CREDENTIALS ${{ runner.temp }}/gha-creds.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${{ runner.temp }}/gha-creds.json" >> $GITHUB_ENV
 
       # Set up the gcloud CLI
       - name: Set up Google Cloud SDK
