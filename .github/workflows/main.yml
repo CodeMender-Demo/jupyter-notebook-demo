@@ -121,9 +121,8 @@ jobs:
       - name: Verify Open Findings
         run: |
           jq -r '.[] | select(.status == "OPEN") | .finding_id' codemender_report.json | while read -r finding_id; do
-              
               echo "Verifying ID: $finding_id"
-              # Your automation script/command goes here
+              cm verify $finding_id --bypass-warning -y
           done
           # Update JSON report on disk
           cm report --format json > codemender_report.json
