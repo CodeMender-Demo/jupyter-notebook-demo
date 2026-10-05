@@ -154,9 +154,9 @@ jobs:
                       echo "CLI succeeded (Exit code 0)"
                       git add .
                       echo "### 🛠️ Proposed Code Changes for $finding_id" >> $GITHUB_STEP_SUMMARY
-                      echo "```" >> $GITHUB_STEP_SUMMARY
+                      echo '```diff' >> $GITHUB_STEP_SUMMARY
                       echo "$(git diff --staged)" >> $GITHUB_STEP_SUMMARY
-                      echo "```" >> $GITHUB_STEP_SUMMARY
+                      echo '```' >> $GITHUB_STEP_SUMMARY
                       break # Exit the loop immediately on success
                   else
                       # The shell enters here if the exit code is non-zero
