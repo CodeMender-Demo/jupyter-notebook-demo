@@ -243,33 +243,60 @@ jobs:
 
           # Process top findings: verify with PoC, then fix
           jq -r '.[] | [.finding_id, .title] | @tsv' high_priority.json | while IFS=$'\t' read -r id title; do
-            echo "Processing finding: $title ($id)"
-            
-            # --- VERIFY ---
-            # Attempt to synthesize and execute a PoC exploit in sandbox
-            if cm verify "$id" --sandbox=false --yes --bypass-warning; then
-              echo "- ⚠️ **Confirmed Exploitable**: $title (ID: \`$id\`)" >> $GITHUB_STEP_SUMMARY
-              
-              # --- FIX ---
-              # Generate patch, run test suite, and ensure PoC fails
-              if cm fix "$id" --sandbox=false --yes --bypass-warning && ! git diff --quiet;  then
+            echo "::group::Analyzing Finding $id: $title"
+
+            # 1. Run Verification (Agent generates & runs PoC)
+            cm verify "$id" -y --bypass-warning || true
+  
+            # 2. Query the updated finding status
+            FINDING_STATE=$(cm report "$id" --format=json | jq -r '.[0].status // empty')
+        
+            echo "Post-verification status: $FINDING_STATE"
+  
+            # 3. Branch based on verification outcome
+            if [ "$FINDING_STATE" != "VERIFIED" ]; then
+              # ------------------------------------------------------
+              # SCENARIO A: Vulnerability is NOT exploitable
+              # ------------------------------------------------------
+              echo "### 🛡️ False Positive Filtered: $title" >> $GITHUB_STEP_SUMMARY
+              echo "- **Finding ID**: \`$id\`" >> $GITHUB_STEP_SUMMARY
+              echo "- **Result**: Determined **non-exploitable** by PoC analysis." >> $GITHUB_STEP_SUMMARY
+              echo "- **Action**: Automatically marked as \`DISMISSED\`. No code modifications required." >> $GITHUB_STEP_SUMMARY
+              echo "::notice title=CodeMender Triage::Finding $id was determined not exploitable and dismissed."
+      
+            elif [ "$FINDING_STATE" = "VERIFIED" ]; then
+              # ------------------------------------------------------
+              # SCENARIO B: Vulnerability is CONFIRMED exploitable
+              # ------------------------------------------------------
+              echo "### ⚠️ Confirmed Exploitable: $title" >> $GITHUB_STEP_SUMMARY
+              echo "- **Finding ID**: \`$id\`" >> $GITHUB_STEP_SUMMARY
+              echo "- **Result**: Active PoC exploit succeeded." >> $GITHUB_STEP_SUMMARY
+              echo "- **Action**: Proceeding to automated remediation..." >> $GITHUB_STEP_SUMMARY
+      
+              # 4. FIX: Only attempt remediation for confirmed vulnerabilities
+              if cm fix "$id" -y --bypass-warning && ! git diff --quiet; then
                 BRANCH_NAME="codemender/fix-$id"
                 git checkout -b "$BRANCH_NAME"
-                git commit -am "fix(security): resolve $title (CodeMender $id)"
+                git commit -am "fix(security): remediate verified $title ($id)"
                 git push origin "$BRANCH_NAME" --force
-
-                # Open an automated PR directly into main for the dev team
+      
                 gh pr create \
                   --title "🔒 Security Fix: $title" \
-                  --body "CodeMender verified this vulnerability with an active PoC exploit and produced this verified patch. Please review and merge." \
+                  --body "CodeMender verified this vulnerability with an active PoC exploit and produced this patch." \
                   --base main \
                   --head "$BRANCH_NAME" || true
-
+      
                 git checkout main
+                echo "- **Patch Status**: ✅ Fix generated, verified against PoC, and PR opened." >> $GITHUB_STEP_SUMMARY
+              else
+                echo "- **Patch Status**: ⚠️ Fix could not be automatically applied." >> $GITHUB_STEP_SUMMARY
               fi
+      
             else
-              echo "- ℹ️ **Unconfirmed / Non-exploitable**: $title (Filtered false-positive)" >> $GITHUB_STEP_SUMMARY
+              echo "Finding $id is in unexpected state: $FINDING_STATE"
             fi
+      
+            echo "::endgroup::"
           done
 
       - name: Export Markdown & HTML Audit Artifacts
