@@ -130,9 +130,12 @@ jobs:
               with open(config_file, 'w') as f:
                   yaml.dump(config, f, default_flow_style=False)
               print(f"Updated {config_file} with new extensions:")
-              print(yaml.dump(config, f, default_flow_style=False))
           else:
               print("No new extensions found.")
+
+      - name: Print config.yaml
+        run: |
+          cat ~/.codemender/config.yaml
 
       - name: Find
         run: |
