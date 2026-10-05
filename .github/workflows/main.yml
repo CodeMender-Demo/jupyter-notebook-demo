@@ -152,6 +152,7 @@ jobs:
                   
                   if cm fix $finding_id --bypass-warning -y; then
                       echo "CLI succeeded (Exit code 0)"
+                      git add .
                       echo "### 🛠️ Proposed Code Changes for $finding_id" >> $GITHUB_STEP_SUMMARY
                       echo "```" >> $GITHUB_STEP_SUMMARY
                       echo "$(git diff --staged)" >> $GITHUB_STEP_SUMMARY
