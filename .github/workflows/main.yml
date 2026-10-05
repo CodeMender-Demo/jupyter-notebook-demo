@@ -302,8 +302,8 @@ jobs:
       - name: Export Markdown & HTML Audit Artifacts
         if: always()
         run: |
-          cm report --format=html --output=codemender-audit.html
-          cm report --format=md --output=codemender-audit.md
+          cm report --format=html > codemender-audit.html
+          cm report --format=md > output=codemender-audit.md
 
       - name: Upload Audit Reports
         if: always()
@@ -315,6 +315,7 @@ jobs:
             codemender-audit.md
       
       - name: Format SARIF Report for GitHub UI
+        if: always()
         run: |
           python3 -c '
           import json, re, os
@@ -430,6 +431,7 @@ jobs:
       
       # Upload the SARIF payload directly to the target repository using the GitHub CLI
       - name: Upload SARIF directly via GitHub CLI
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -454,6 +456,7 @@ jobs:
             -f ref="$BRANCH_REF" \
             -f sarif="$SARIF_BASE64" \
             -f tool_name="CodeMender"
+      
       # Cleanup Sensitive Binaries (Best Practice)
       - name: Cleanup
         if: always()
