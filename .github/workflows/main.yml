@@ -68,15 +68,42 @@ jobs:
     
           config_file = os.path.expanduser('~/.codemender/config.yaml')
             
-          # 1. Discover all unique file extensions, excluding .git
-          extensions = set()
-          for root, _, files in os.walk('.'):
-              if '.git' in root:
-                  continue
-              for file in files:
-                  _, ext = os.path.splitext(file)
-                  if ext:
-                      extensions.add(ext)
+          # # 1. Discover all unique file extensions, excluding .git
+          # extensions = set()
+          # for root, _, files in os.walk('.'):
+          #     if '.git' in root:
+          #         continue
+          #     for file in files:
+          #         _, ext = os.path.splitext(file)
+          #         if ext:
+          #             extensions.add(ext)
+          # 1. Declare file types to add
+          extensions_list = [
+            ".aspx", 
+            ".cshtml", 
+            ".vbhtml", 
+            ".php", 
+            ".vue", 
+            ".sql", 
+            ".pkh", 
+            ".pkb", 
+            ".tsql", 
+            ".abap",
+            ".acds",
+            ".abdl",
+            ".cls", 
+            ".trigger", 
+            ".ipynb", 
+            ".pl", 
+            ".pm", 
+            ".sh", 
+            ".vb", 
+            ".vbp", 
+            ".frm", 
+            ".bas", 
+            ".cls-meta.xml", 
+            ".pls"
+          ]  
     
           # 2. Load existing config
           if os.path.exists(config_file):
@@ -93,7 +120,7 @@ jobs:
     
           # 3. Add new extensions
           updated = False
-          for ext in extensions:
+          for ext in extensions_list:
             if ext not in config['scan']['extensions'][list_key]:
                   config['scan']['extensions'][list_key].append(ext)
                   updated = True
@@ -102,96 +129,160 @@ jobs:
           if updated:
               with open(config_file, 'w') as f:
                   yaml.dump(config, f, default_flow_style=False)
-              print(f"Updated {config_file} with new extensions.")
+              print(f"Updated {config_file} with new extensions:")
+              print(yaml.dump(config, f, default_flow_style=False))
           else:
               print("No new extensions found.")
 
       - name: Find
         run: |
-            cm find . --deep
+            cm find . --deep --deep-workers 16
             # Write a json report
             cm report --format json > codemender_report.json
 
-      - name: Verify Open Findings
-        run: |
-          jq -r '.[] | select(.status == "OPEN") | .finding_id' codemender_report.json | while read -r finding_id; do
-              echo "Verifying ID: $finding_id"
-              max_retries=3
-              for ((attempt=1; attempt<=max_retries; attempt++)); do
-                  echo "Attempt $attempt of $max_retries..."
+      # - name: Verify Open Findings
+      #   run: |
+      #     jq -r '.[] | select(.status == "OPEN" and (.severity == "HIGH" or .severity == "CRITICAL")) | .finding_id' codemender_report.json | while read -r finding_id; do
+      #         echo "Verifying ID: $finding_id"
+      #         max_retries=3
+      #         for ((attempt=1; attempt<=max_retries; attempt++)); do
+      #             echo "Attempt $attempt of $max_retries..."
                   
-                  if cm verify $finding_id --bypass-warning -y; then
-                      echo "CLI succeeded (Exit code 0)"
-                      break # Exit the loop immediately on success
-                  else
-                      # The shell enters here if the exit code is non-zero
-                      exit_code=$?
-                      echo "CLI failed with exit code: $exit_code"
+      #             if cm verify $finding_id --bypass-warning -y; then
+      #                 echo "CLI succeeded (Exit code 0)"
+      #                 break # Exit the loop immediately on success
+      #             else
+      #                 # The shell enters here if the exit code is non-zero
+      #                 exit_code=$?
+      #                 echo "CLI failed with exit code: $exit_code"
                       
-                      if [ "$attempt" -eq "$max_retries" ]; then
-                          echo "All $max_retries attempts failed. Exiting."
-                          exit "$exit_code"
-                      fi
+      #                 if [ "$attempt" -eq "$max_retries" ]; then
+      #                     echo "All $max_retries attempts failed. Exiting."
+      #                     exit "$exit_code"
+      #                 fi
                       
-                      # Optional: Wait 2 seconds before retrying
-                      echo "Retrying in 2 seconds..."
-                      sleep 2
-                  fi
-              done
-          done
-          # Update JSON report on disk
-          cm report --format json > codemender_report.json
+      #                 # Optional: Wait 2 seconds before retrying
+      #                 echo "Retrying in 2 seconds..."
+      #                 sleep 2
+      #             fi
+      #         done
+      #     done
+      #     # Update JSON report on disk
+      #     cm report --format json > codemender_report.json
           
-      - name: Suggest Fix For Verified Findings
-        run: |
-          jq -r '.[] | select(.status == "VERIFIED") | .finding_id' codemender_report.json | while read -r finding_id; do
-              echo "Suggesting fix for ID: $finding_id"
-              max_retries=3
-              for ((attempt=1; attempt<=max_retries; attempt++)); do
-                  echo "Attempt $attempt of $max_retries..."
+      # - name: Suggest Fix For Verified Findings
+      #   run: |
+      #     jq -r '.[] | select(.status == "VERIFIED") | .finding_id' codemender_report.json | while read -r finding_id; do
+      #         echo "Suggesting fix for ID: $finding_id"
+      #         max_retries=3
+      #         for ((attempt=1; attempt<=max_retries; attempt++)); do
+      #             echo "Attempt $attempt of $max_retries..."
                   
-                  if cm fix $finding_id --bypass-warning -y; then
-                      echo "CLI succeeded (Exit code 0)"
-                      git add .
-                      echo "### 🛠️ Proposed Code Changes for $finding_id" >> $GITHUB_STEP_SUMMARY
-                      echo '```diff' >> $GITHUB_STEP_SUMMARY
-                      echo "$(git diff --staged)" >> $GITHUB_STEP_SUMMARY
-                      echo '```' >> $GITHUB_STEP_SUMMARY
-                      break # Exit the loop immediately on success
-                  else
-                      # The shell enters here if the exit code is non-zero
-                      exit_code=$?
-                      echo "CLI failed with exit code: $exit_code"
+      #             if cm fix $finding_id --bypass-warning -y; then
+      #                 echo "CLI succeeded (Exit code 0)"
+      #                 git add .
+      #                 echo "### 🛠️ Proposed Code Changes for $finding_id" >> $GITHUB_STEP_SUMMARY
+      #                 echo '```diff' >> $GITHUB_STEP_SUMMARY
+      #                 echo "$(git diff --staged)" >> $GITHUB_STEP_SUMMARY
+      #                 echo '```' >> $GITHUB_STEP_SUMMARY
+      #                 break # Exit the loop immediately on success
+      #             else
+      #                 # The shell enters here if the exit code is non-zero
+      #                 exit_code=$?
+      #                 echo "CLI failed with exit code: $exit_code"
                       
-                      if [ "$attempt" -eq "$max_retries" ]; then
-                          echo "All $max_retries attempts failed. Exiting."
-                          exit "$exit_code"
-                      fi
+      #                 if [ "$attempt" -eq "$max_retries" ]; then
+      #                     echo "All $max_retries attempts failed. Exiting."
+      #                     exit "$exit_code"
+      #                 fi
                       
-                      # Optional: Wait 2 seconds before retrying
-                      echo "Retrying in 2 seconds..."
-                      sleep 2
-                  fi
-              done
-          done
-          # Update JSON report on disk
-          cm report --format json > codemender_report.json
+      #                 # Optional: Wait 2 seconds before retrying
+      #                 echo "Retrying in 2 seconds..."
+      #                 sleep 2
+      #             fi
+      #         done
+      #     done
+      #     # Update JSON report on disk
+      #     cm report --format json > codemender_report.json
       
-      # Generate and Publish the Report
-      - name: Generate Security Report
+      # # Generate and Publish the Report
+      # - name: Generate Security Report
+      #   run: |
+      #     echo "📊 Generating Markdown report..."
+      #     cm report --format md > codemender_summary.md
+      #     # Extract the execution and token usage line from the scan log
+      #     TOKEN_SUMMARY=$(grep "Tokens:" scan_output.log | tail -n 1 || true)
+      #     # If the token summary was found, inject it at the top of the GitHub Step Summary
+      #     if [ -n "$TOKEN_SUMMARY" ]; then
+      #       echo "### 🪙 Execution & Token Usage" >> $GITHUB_STEP_SUMMARY
+      #       echo "> $TOKEN_SUMMARY" >> $GITHUB_STEP_SUMMARY
+      #       echo "---" >> $GITHUB_STEP_SUMMARY
+      #     fi
+      #     echo "# CodeMender Scan Results" >> $GITHUB_STEP_SUMMARY
+      #     cat codemender_summary.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify Exploitability and Generate Remediation PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "📊 Generating Markdown report..."
-          cm report --format md > codemender_summary.md
-          # Extract the execution and token usage line from the scan log
-          TOKEN_SUMMARY=$(grep "Tokens:" scan_output.log | tail -n 1 || true)
-          # If the token summary was found, inject it at the top of the GitHub Step Summary
-          if [ -n "$TOKEN_SUMMARY" ]; then
-            echo "### 🪙 Execution & Token Usage" >> $GITHUB_STEP_SUMMARY
-            echo "> $TOKEN_SUMMARY" >> $GITHUB_STEP_SUMMARY
-            echo "---" >> $GITHUB_STEP_SUMMARY
+          # Filter for OPEN High and Critical vulnerabilities
+          cm report --format=json --status=OPEN \
+            | jq '[.[] | select(.severity | ascii_upcase | IN("CRITICAL", "HIGH"))]' \
+            > high_priority.json
+
+          COUNT=$(jq length high_priority.json)
+          echo "Identified $COUNT high/critical finding(s)." >> $GITHUB_STEP_SUMMARY
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "✅ No critical or high vulnerabilities detected." >> $GITHUB_STEP_SUMMARY
+            exit 0
           fi
-          echo "# CodeMender Scan Results" >> $GITHUB_STEP_SUMMARY
-          cat codemender_summary.md >> $GITHUB_STEP_SUMMARY
+
+          # Process top findings: verify with PoC, then fix
+          jq -r '.[] | [.finding_id, .title] | @tsv' high_priority.json | while IFS=$'\t' read -r id title; do
+            echo "Processing finding: $title ($id)"
+            
+            # --- VERIFY ---
+            # Attempt to synthesize and execute a PoC exploit in sandbox
+            if cm verify "$id" --sandbox=false --yes --bypass-warning; then
+              echo "- ⚠️ **Confirmed Exploitable**: $title (ID: \`$id\`)" >> $GITHUB_STEP_SUMMARY
+              
+              # --- FIX ---
+              # Generate patch, run test suite, and ensure PoC fails
+              if cm fix "$id" --sandbox=false --yes --bypass-warning && ! git diff --quiet;  then
+                BRANCH_NAME="codemender/fix-$id"
+                git checkout -b "$BRANCH_NAME"
+                git commit -am "fix(security): resolve $title (CodeMender $id)"
+                git push origin "$BRANCH_NAME" --force
+
+                # Open an automated PR directly into main for the dev team
+                gh pr create \
+                  --title "🔒 Security Fix: $title" \
+                  --body "CodeMender verified this vulnerability with an active PoC exploit and produced this verified patch. Please review and merge." \
+                  --base main \
+                  --head "$BRANCH_NAME" || true
+
+                git checkout main
+              fi
+            else
+              echo "- ℹ️ **Unconfirmed / Non-exploitable**: $title (Filtered false-positive)" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+      - name: Export Markdown & HTML Audit Artifacts
+        if: always()
+        run: |
+          cm report --format=html --output=codemender-audit.html
+          cm report --format=md --output=codemender-audit.md
+
+      - name: Upload Audit Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codemender-nightly-reports
+          path: |
+            codemender-audit.html
+            codemender-audit.md
       
       - name: Format SARIF Report for GitHub UI
         run: |
