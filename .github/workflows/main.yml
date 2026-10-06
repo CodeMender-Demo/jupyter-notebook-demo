@@ -1,4 +1,4 @@
-name: CodeMender Scan, Verify, Fix (export GitHub Code Scanning)
+name: CodeMender Scan, Verify, Fix (CRITICAL, HIGH)
 on:
   # Trigger manually via the GitHub Actions UI
   workflow_dispatch:
@@ -275,19 +275,28 @@ jobs:
       
               # 4. FIX: Only attempt remediation for confirmed vulnerabilities
               if cm fix "$id" -y --bypass-warning && ! git diff --quiet; then
-                BRANCH_NAME="codemender/fix-$id"
-                git checkout -b "$BRANCH_NAME"
-                git commit -am "fix(security): remediate verified $title ($id)"
-                git push origin "$BRANCH_NAME" --force
-      
-                gh pr create \
-                  --title "🔒 Security Fix: $title" \
-                  --body "CodeMender verified this vulnerability with an active PoC exploit and produced this patch." \
-                  --base main \
-                  --head "$BRANCH_NAME" || true
-      
-                git checkout main
-                echo "- **Patch Status**: ✅ Fix generated, verified against PoC, and PR opened." >> $GITHUB_STEP_SUMMARY
+                # Check Finding Status
+                FINDING_STATE=$(cm report "$id" --format=json | jq -r '.[0].status // empty')
+                if [ "$FINDING_STATE" != "VERIFIED" ]; then
+                  # ------------------------------------------------------
+                  # SCENARIO A: Vulnerability is NOT fixed
+                  # ------------------------------------------------------
+                  ⚠️ Fix could not be automatically applied." >> $GITHUB_STEP_SUMMARY
+                else
+                  echo "Post-verification status: $FINDING_STATE"
+                  BRANCH_NAME="codemender/fix-$id"
+                  git checkout -b "$BRANCH_NAME"
+                  git commit -am "fix(security): remediate verified $title ($id)"
+                  git push origin "$BRANCH_NAME" --force
+        
+                  gh pr create \
+                    --title "🔒 Security Fix: $title" \
+                    --body "CodeMender verified this vulnerability with an active PoC exploit and produced this patch." \
+                    --base main \
+                    --head "$BRANCH_NAME" || true
+                  git checkout main
+                  echo "- **Patch Status**: ✅ Fix generated, verified against PoC, and PR opened." >> $GITHUB_STEP_SUMMARY
+                fi
               else
                 echo "- **Patch Status**: ⚠️ Fix could not be automatically applied." >> $GITHUB_STEP_SUMMARY
               fi
@@ -299,11 +308,12 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Export Markdown & HTML Audit Artifacts
+      - name: Export Report Artifacts
         if: always()
         run: |
           cm report --format=html > codemender-audit.html
           cm report --format=md > output=codemender-audit.md
+          cm report --format=json > output=codemender_report.json
 
       - name: Upload Audit Reports
         if: always()
@@ -313,6 +323,7 @@ jobs:
           path: |
             codemender-audit.html
             codemender-audit.md
+            codemender_report.json
       
       - name: Format SARIF Report for GitHub UI
         if: always()
